@@ -1,0 +1,83 @@
+# Runs when a version tag (e.g. v1.0.0) is pushed:
+#   1. Checks the tag matches $plugin->release in version.php.
+#   2. Builds placecom_mcp-<tag>.zip (root folder "placecom_mcp") and attaches it to a GitHub Release.
+#   3. If the MOODLE_ORG_TOKEN secret is set, publishes the version to the Moodle plugins directory.
+#      The first version must be uploaded manually on moodle.org and approved before this works.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  PLUGIN: local_placecom_mcp
+  ZIPROOT: placecom_mcp
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: echo "name=${{ github.event.inputs.tag || github.ref_name }}" >> $GITHUB_OUTPUT
+
+      - name: Check out tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.name }}
+
+      - name: Check tag matches version.php release
+        run: |
+          RELEASE=$(sed -nE "s/^\\\$plugin->release *= *'([^']+)'.*/\1/p" version.php)
+          if [ "v${RELEASE}" != "${{ steps.tag.outputs.name }}" ] && [[ "${{ steps.tag.outputs.name }}" != "v${RELEASE}-"* ]]; then
+            echo "::error::Tag ${{ steps.tag.outputs.name }} does not match \$plugin->release '${RELEASE}' in version.php"
+            exit 1
+          fi
+
+      - name: Build ZIP
+        run: |
+          git archive --format=zip --prefix="${ZIPROOT}/" \
+            -o "${ZIPROOT}-${{ steps.tag.outputs.name }}.zip" HEAD
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${ZIPROOT}-${TAG}.zip" --clobber
+          else
+            gh release create "$TAG" "${ZIPROOT}-${TAG}.zip" --title "$TAG" --generate-notes --verify-tag
+          fi
+
+      - name: Publish to Moodle plugins directory
+        env:
+          TOKEN: ${{ secrets.MOODLE_ORG_TOKEN }}
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "MOODLE_ORG_TOKEN secret not set; skipping moodle.org publication."
+            exit 0
+          fi
+          ZIPURL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ZIPROOT}-${TAG}.zip"
+          RESPONSE=$(curl -s https://moodle.org/webservice/rest/server.php \
+            --data-urlencode "wstoken=${TOKEN}" \
+            --data-urlencode "wsfunction=local_plugins_add_version" \
+            --data-urlencode "moodlewsrestformat=json" \
+            --data-urlencode "frankenstyle=${PLUGIN}" \
+            --data-urlencode "zipurl=${ZIPURL}" \
+            --data-urlencode "vcssystem=git" \
+            --data-urlencode "vcsrepositoryurl=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --data-urlencode "vcstag=${TAG}" \
+            --data-urlencode "changelogurl=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGES.md" \
+            --data-urlencode "altdownloadurl=${ZIPURL}")
+          echo "$RESPONSE" | jq .
+          echo "$RESPONSE" | jq --exit-status '.id' > /dev/null

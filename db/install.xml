@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/placecom_mcp/db" VERSION="2026102000" COMMENT="XMLDB file for local_placecom_mcp"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="local_placecom_mcp_client" COMMENT="OAuth 2.0 clients (AI assistants) registered by an administrator">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="clientid" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false" COMMENT="Public client identifier, immutable after creation"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Display name shown on the consent screen; empty means the client identifier is shown"/>
+        <FIELD NAME="secrethash" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="password_hash() of the client secret; empty for public clients"/>
+        <FIELD NAME="secrethint" TYPE="char" LENGTH="4" NOTNULL="false" SEQUENCE="false" COMMENT="Last four characters of the secret; null for public clients"/>
+        <FIELD NAME="redirecturis" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Registered absolute redirect URIs, one per line"/>
+        <FIELD NAME="scope" TYPE="char" LENGTH="1333" NOTNULL="true" SEQUENCE="false" COMMENT="Normalised space separated registered scopes"/>
+        <FIELD NAME="requirepkce" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="1 when PKCE is mandatory for this client"/>
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="0 blocks authorisation, token requests and token use"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="usermodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Administrator who last changed the client"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="usermodified" TYPE="foreign" FIELDS="usermodified" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="clientid" UNIQUE="true" FIELDS="clientid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_placecom_mcp_key" COMMENT="RSA key pairs used to sign ID tokens">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="kid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="RFC 7638 JWK thumbprint of the public key"/>
+        <FIELD NAME="algorithm" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="RS256" SEQUENCE="false"/>
+        <FIELD NAME="publickey" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Public key in PEM format"/>
+        <FIELD NAME="privatekey" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Private key in PEM format, encrypted with the site encryption key"/>
+        <FIELD NAME="active" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 for the single key currently used for signing"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timeretired" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="When the key stopped being the signing key; 0 while active"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="kid" UNIQUE="true" FIELDS="kid"/>
+        <INDEX NAME="active" UNIQUE="false" FIELDS="active"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_placecom_mcp_consent" COMMENT="Scopes a user has approved for a client on the consent screen">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="clientid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="scope" TYPE="char" LENGTH="1333" NOTNULL="true" SEQUENCE="false" COMMENT="Scope string last approved by the user"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="clientid" TYPE="foreign" FIELDS="clientid" REFTABLE="local_placecom_mcp_client" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="clientid-userid" UNIQUE="true" FIELDS="clientid, userid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_placecom_mcp_grant" COMMENT="Connections: one row per successful authorisation code exchange">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="clientid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="scope" TYPE="char" LENGTH="1333" NOTNULL="true" SEQUENCE="false" COMMENT="Scope granted by the authorisation code; upper bound for refreshes"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Last token issuance"/>
+        <FIELD NAME="timeaccessed" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Last use of the MCP endpoint"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="clientid" TYPE="foreign" FIELDS="clientid" REFTABLE="local_placecom_mcp_client" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="local_placecom_mcp_authcode" COMMENT="Authorisation codes, stored as SHA-256 hashes only">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="codehash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 hex digest of the code"/>
+        <FIELD NAME="clientid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="redirecturi" TYPE="char" LENGTH="1333" NOTNULL="false" SEQUENCE="false" COMMENT="Redirect URI supplied in the authorisation request; null when omitted"/>
+        <FIELD NAME="scope" TYPE="char" LENGTH="1333" NOTNULL="true" SEQUENCE="false" COMMENT="Granted scope"/>
+        <FIELD NAME="nonce" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="OpenID Connect nonce"/>
+        <FIELD NAME="codechallenge" TYPE="char" LENGTH="128" NOTNULL="false" SEQUENCE="false" COMMENT="PKCE S256 code challenge"/>
+        <FIELD NAME="authtime" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Time the user logged in to Moodle"/>
+        <FIELD NAME="expires" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timeused" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="When the code was exchanged; 0 while unused"/>
+        <FIELD NAME="grantid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Grant created from this code, used to revoke it on replay"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="clientid" TYPE="foreign" FIELDS="clientid" REFTABLE="local_placecom_mcp_client" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="grantid" TYPE="foreign" FIELDS="grantid" REFTABLE="local_placecom_mcp_grant" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="codehash" UNIQUE="true" FIELDS="codehash"/>
+        <INDEX NAME="expires" UNIQUE="false" FIELDS="expires"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_placecom_mcp_token" COMMENT="Access tokens, stored as SHA-256 hashes only">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="tokenhash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 hex digest of the access token"/>
+        <FIELD NAME="grantid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="clientid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="scope" TYPE="char" LENGTH="1333" NOTNULL="true" SEQUENCE="false" COMMENT="Scope of this access token"/>
+        <FIELD NAME="expires" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="grantid" TYPE="foreign" FIELDS="grantid" REFTABLE="local_placecom_mcp_grant" REFFIELDS="id"/>
+        <KEY NAME="clientid" TYPE="foreign" FIELDS="clientid" REFTABLE="local_placecom_mcp_client" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="tokenhash" UNIQUE="true" FIELDS="tokenhash"/>
+        <INDEX NAME="expires" UNIQUE="false" FIELDS="expires"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_placecom_mcp_refresh" COMMENT="Refresh tokens, stored as SHA-256 hashes only">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="tokenhash" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="SHA-256 hex digest of the refresh token"/>
+        <FIELD NAME="grantid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="clientid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="scope" TYPE="char" LENGTH="1333" NOTNULL="true" SEQUENCE="false" COMMENT="Full scope of the grant"/>
+        <FIELD NAME="expires" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="grantid" TYPE="foreign" FIELDS="grantid" REFTABLE="local_placecom_mcp_grant" REFFIELDS="id"/>
+        <KEY NAME="clientid" TYPE="foreign" FIELDS="clientid" REFTABLE="local_placecom_mcp_client" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="tokenhash" UNIQUE="true" FIELDS="tokenhash"/>
+        <INDEX NAME="expires" UNIQUE="false" FIELDS="expires"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>
