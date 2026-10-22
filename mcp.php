@@ -25,7 +25,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define('NO_MOODLE_COOKIES', true);
+// Moodle defines NO_MOODLE_COOKIES itself for web service requests (lib/setup.php).
 define('WS_SERVER', true);
 
 // phpcs:ignore moodle.Files.RequireLogin.Missing -- Bearer token endpoint; the MCP server authenticates every request.
