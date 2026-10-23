@@ -193,10 +193,10 @@ final class server_test extends \advanced_testcase {
         $this->assertSame(jsonrpc::UNSUPPORTED_PROTOCOL_VERSION, $response->get_json()['error']['code']);
         $data = $response->get_json()['error']['data'];
         $this->assertSame('1999-01-01', $data['requested']);
-        $this->assertSame(server::SUPPORTED_VERSIONS, $data['supported']);
+        $this->assertSame(server::ALL_VERSIONS, $data['supported']);
         $message = $response->get_json()['error']['message'];
         $this->assertStringContainsString('1999-01-01', $message);
-        $this->assertStringContainsString(implode(', ', server::SUPPORTED_VERSIONS), $message);
+        $this->assertStringContainsString(implode(', ', server::ALL_VERSIONS), $message);
 
         $response = $this->send(
             '{"jsonrpc":"2.0","method":"ping","id":1}',
@@ -207,6 +207,148 @@ final class server_test extends \advanced_testcase {
         $this->assertSame(200, $response->get_status());
     }
 
+    /**
+     * Build a 2026-07-28 request body.
+     *
+     * @param string $method JSON-RPC method.
+     * @param array $params Extra params.
+     * @return string
+     */
+    private function modern_body(string $method, array $params = []): string {
+        $params['_meta'] = [
+            'io.modelcontextprotocol/protocolVersion' => '2026-07-28',
+            'io.modelcontextprotocol/clientInfo' => ['name' => 'test', 'version' => '1'],
+            'io.modelcontextprotocol/clientCapabilities' => new \stdClass(),
+        ];
+        return json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => $params]);
+    }
+
+    /**
+     * The constants for the two request styles agree.
+     */
+    public function test_all_versions_match(): void {
+        $this->assertSame(array_merge([server::MODERN_VERSION], server::SUPPORTED_VERSIONS), server::ALL_VERSIONS);
+    }
+
+    /**
+     * The earlier revisions still work.
+     */
+    public function test_legacy_versions_still_work(): void {
+        foreach (server::SUPPORTED_VERSIONS as $version) {
+            $response = $this->send(
+                '{"jsonrpc":"2.0","method":"ping","id":1}',
+                'POST',
+                true,
+                ['MCP-Protocol-Version' => $version]
+            );
+            $this->assertSame(200, $response->get_status(), $version);
+        }
+    }
+
+    /**
+     * A 2026-07-28 server/discover request works without initialize.
+     */
+    public function test_modern_discover(): void {
+        $response = $this->send(
+            $this->modern_body('server/discover'),
+            'POST',
+            true,
+            ['MCP-Protocol-Version' => '2026-07-28', 'Mcp-Method' => 'server/discover']
+        );
+        $this->assertSame(200, $response->get_status());
+        $result = $response->get_json()['result'];
+        $this->assertSame('complete', $result['resultType']);
+        $this->assertSame(server::ALL_VERSIONS, $result['supportedVersions']);
+        $this->assertSame('private', $result['cacheScope']);
+        $this->assertArrayHasKey('io.modelcontextprotocol/serverInfo', $result['_meta']);
+    }
+
+    /**
+     * A 2026-07-28 tools/list result carries resultType and the cache fields.
+     */
+    public function test_modern_tools_list(): void {
+        $response = $this->send(
+            $this->modern_body('tools/list'),
+            'POST',
+            true,
+            ['MCP-Protocol-Version' => '2026-07-28', 'Mcp-Method' => 'tools/list']
+        );
+        $this->assertSame(200, $response->get_status());
+        $result = $response->get_json()['result'];
+        $this->assertSame('complete', $result['resultType']);
+        $this->assertSame(server::MODERN_TTL_MS, $result['ttlMs']);
+        $this->assertSame('private', $result['cacheScope']);
+        $this->assertIsArray($result['tools']);
+    }
+
+    /**
+     * Headers that are missing or disagree with the body are refused.
+     */
+    public function test_modern_header_mismatch(): void {
+        $response = $this->send(
+            $this->modern_body('tools/list'),
+            'POST',
+            true,
+            ['MCP-Protocol-Version' => '2026-07-28', 'Mcp-Method' => 'server/discover']
+        );
+        $this->assertSame(400, $response->get_status());
+        $this->assertSame(jsonrpc::HEADER_MISMATCH, $response->get_json()['error']['code']);
+
+        $response = $this->send(
+            $this->modern_body('tools/list'),
+            'POST',
+            true,
+            ['MCP-Protocol-Version' => '2026-07-28']
+        );
+        $this->assertSame(400, $response->get_status());
+        $this->assertSame(jsonrpc::HEADER_MISMATCH, $response->get_json()['error']['code']);
+
+        $response = $this->send(
+            '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}',
+            'POST',
+            true,
+            ['MCP-Protocol-Version' => '2026-07-28', 'Mcp-Method' => 'tools/list']
+        );
+        $this->assertSame(400, $response->get_status());
+        $this->assertSame(jsonrpc::HEADER_MISMATCH, $response->get_json()['error']['code']);
+    }
+
+    /**
+     * A tools/call request must name the same tool in the Mcp-Name header.
+     */
+    public function test_modern_tool_name_header(): void {
+        $body = $this->modern_body('tools/call', ['name' => 'core_webservice_get_site_info']);
+        $response = $this->send(
+            $body,
+            'POST',
+            true,
+            ['MCP-Protocol-Version' => '2026-07-28', 'Mcp-Method' => 'tools/call', 'Mcp-Name' => 'another_tool']
+        );
+        $this->assertSame(400, $response->get_status());
+        $this->assertSame(jsonrpc::HEADER_MISMATCH, $response->get_json()['error']['code']);
+
+        $response = $this->send(
+            $body,
+            'POST',
+            true,
+            ['MCP-Protocol-Version' => '2026-07-28', 'Mcp-Method' => 'tools/call']
+        );
+        $this->assertSame(400, $response->get_status());
+        $this->assertSame(jsonrpc::HEADER_MISMATCH, $response->get_json()['error']['code']);
+    }
+
+    /**
+     * The initialize handshake does not exist in 2026-07-28.
+     */
+    public function test_modern_initialize_not_found(): void {
+        $response = $this->send(
+            $this->modern_body('initialize'),
+            'POST',
+            true,
+            ['MCP-Protocol-Version' => '2026-07-28', 'Mcp-Method' => 'initialize']
+        );
+        $this->assertSame(jsonrpc::METHOD_NOT_FOUND, $response->get_json()['error']['code']);
+    }
     /**
      * Notifications and client responses get 202 without body.
      */
