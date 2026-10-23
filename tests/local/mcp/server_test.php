@@ -190,7 +190,10 @@ final class server_test extends \advanced_testcase {
             ['MCP-Protocol-Version' => '1999-01-01']
         );
         $this->assertSame(400, $response->get_status());
-        $this->assertSame(jsonrpc::INVALID_REQUEST, $response->get_json()['error']['code']);
+        $this->assertSame(jsonrpc::UNSUPPORTED_PROTOCOL_VERSION, $response->get_json()['error']['code']);
+        $data = $response->get_json()['error']['data'];
+        $this->assertSame('1999-01-01', $data['requested']);
+        $this->assertSame(server::SUPPORTED_VERSIONS, $data['supported']);
         $message = $response->get_json()['error']['message'];
         $this->assertStringContainsString('1999-01-01', $message);
         $this->assertStringContainsString(implode(', ', server::SUPPORTED_VERSIONS), $message);

@@ -187,11 +187,13 @@ class server {
             return $this->error_response(
                 400,
                 null,
-                jsonrpc::INVALID_REQUEST,
+                jsonrpc::UNSUPPORTED_PROTOCOL_VERSION,
                 get_string('error_protocolversion', 'local_placecom_mcp', [
                     'version' => s($version),
                     'supported' => implode(', ', self::SUPPORTED_VERSIONS),
-                ])
+                ]),
+                [],
+                ['supported' => self::SUPPORTED_VERSIONS, 'requested' => $version]
             );
         }
 
