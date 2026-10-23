@@ -53,6 +53,9 @@ class server {
     /** @var string[] Every revision the server answers, latest first. */
     public const ALL_VERSIONS = ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26'];
 
+    /** @var int How long, in milliseconds, clients may cache a server/discover or tools/list result. */
+    public const MODERN_TTL_MS = 60000;
+
     /** @var int Largest accepted request body in bytes (1 MiB). */
     public const MAX_BODY = 1048576;
 
@@ -190,20 +193,21 @@ class server {
         }
 
         $version = self::header_value($server, $headers, 'MCP-Protocol-Version');
-        if ($version !== null && !in_array($version, self::SUPPORTED_VERSIONS, true)) {
+        if ($version !== null && !in_array($version, self::ALL_VERSIONS, true)) {
             return $this->error_response(
                 400,
                 null,
                 jsonrpc::UNSUPPORTED_PROTOCOL_VERSION,
                 get_string('error_protocolversion', 'local_placecom_mcp', [
                     'version' => s($version),
-                    'supported' => implode(', ', self::SUPPORTED_VERSIONS),
+                    'supported' => implode(', ', self::ALL_VERSIONS),
                 ]),
                 [],
-                ['supported' => self::SUPPORTED_VERSIONS, 'requested' => $version]
+                ['supported' => self::ALL_VERSIONS, 'requested' => $version]
             );
         }
 
+        $modern = ($version === self::MODERN_VERSION);
         if (strlen($body) > self::MAX_BODY) {
             return $this->error_response(413, null, jsonrpc::INVALID_REQUEST, self::str('error_bodytoolarge'));
         }
@@ -218,9 +222,20 @@ class server {
             return http_response::empty(202);
         }
 
+        if ($modern) {
+            $problem = $this->modern_header_problem($server, $headers, $request);
+            if ($problem !== null) {
+                return $this->error_response(
+                    400,
+                    null,
+                    jsonrpc::HEADER_MISMATCH,
+                    get_string('error_headermismatch', 'local_placecom_mcp', $problem)
+                );
+            }
+        }
         $id = $request->get_id();
         try {
-            $result = $this->dispatch($request, $ctx);
+            $result = $modern ? $this->dispatch_modern($request, $ctx) : $this->dispatch($request, $ctx);
         } catch (jsonrpc_exception $e) {
             return $this->error_response($e->get_http_status(), $id, $e->get_rpc_code(), $e->get_rpc_message());
         } catch (\Throwable $e) {
@@ -260,7 +275,73 @@ class server {
         }
     }
 
+        /**
+     * Check the headers that a 2026-07-28 request must mirror from its body.
+     *
+     * @param array $server Server variables.
+     * @param array|null $headers Request headers.
+     * @param request $request Parsed request (not a notification).
+     * @return string|null Name of the header that is missing or does not match, null when all is well.
+     */
+    protected function modern_header_problem(array $server, ?array $headers, request $request): ?string {
+        $params = $request->get_params() ?? [];
+        $meta = $params['_meta'] ?? null;
+        $metaversion = is_array($meta) ? ($meta['io.modelcontextprotocol/protocolVersion'] ?? null) : null;
+        if ($metaversion !== self::MODERN_VERSION) {
+            return 'MCP-Protocol-Version';
+        }
+        if (self::header_value($server, $headers, 'Mcp-Method') !== $request->get_method()) {
+            return 'Mcp-Method';
+        }
+        if ($request->is_tool_call()) {
+            $name = $params['name'] ?? null;
+            if (!is_string($name) || self::header_value($server, $headers, 'Mcp-Name') !== $name) {
+                return 'Mcp-Name';
+            }
+        }
+        return null;
+    }
+
     /**
+     * Run a JSON-RPC method for a 2026-07-28 request.
+     *
+     * @param request $request Parsed request (not a notification).
+     * @param auth_context $ctx Authenticated caller.
+     * @return mixed The result member.
+     * @throws jsonrpc_exception For unknown methods and invalid parameters.
+     */
+    protected function dispatch_modern(request $request, auth_context $ctx) {
+        switch ($request->get_method()) {
+            case 'server/discover':
+                return [
+                    'resultType' => 'complete',
+                    'supportedVersions' => self::ALL_VERSIONS,
+                    'capabilities' => ['tools' => ['listChanged' => false]],
+                    'instructions' => self::str('mcp_instructions'),
+                    '_meta' => [
+                        'io.modelcontextprotocol/serverInfo' => [
+                            'name' => self::SERVER_NAME,
+                            'version' => self::server_version(),
+                        ],
+                    ],
+                    'ttlMs' => self::MODERN_TTL_MS,
+                    'cacheScope' => 'private',
+                ];
+            case 'tools/list':
+                return [
+                    'resultType' => 'complete',
+                    'tools' => $this->registry->list_tools($ctx),
+                    'ttlMs' => self::MODERN_TTL_MS,
+                    'cacheScope' => 'private',
+                ];
+            case 'tools/call':
+                return ['resultType' => 'complete'] +
+                    $this->executor->call($request->get_tool_name(), $request->get_tool_arguments(), $ctx);
+            default:
+                throw new jsonrpc_exception(jsonrpc::METHOD_NOT_FOUND, self::str('error_methodnotfound'));
+        }
+    }
+     /**
      * Response for an unexpected failure.
      *
      * @param string|int|null $id Request id, if known.
