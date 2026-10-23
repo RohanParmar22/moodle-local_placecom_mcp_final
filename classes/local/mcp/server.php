@@ -275,7 +275,7 @@ class server {
         }
     }
 
-        /**
+    /**
      * Check the headers that a 2026-07-28 request must mirror from its body.
      *
      * @param array $server Server variables.
@@ -341,7 +341,8 @@ class server {
                 throw new jsonrpc_exception(jsonrpc::METHOD_NOT_FOUND, self::str('error_methodnotfound'));
         }
     }
-     /**
+    
+    /**
      * Response for an unexpected failure.
      *
      * @param string|int|null $id Request id, if known.
