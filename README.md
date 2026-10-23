@@ -27,6 +27,7 @@ It has no third-party dependencies.
    install the ZIP through Site administration > Plugins > Install plugins.
 2. Visit Site administration > Notifications to complete the installation.
 3. Turn on **Enable web services** if it is not on yet.
+4. Add the web server rewrite rules (see the `.well-known` rewrite rules section below). Assistants such as Claude need them to find the sign-in page.
 
 During installation an RSA signing key is created for ID tokens. If OpenSSL cannot create the key (this
 happens on some Windows servers without an OpenSSL configuration file), the installation still
@@ -90,9 +91,10 @@ Manager role has by default.
    screen listing what the assistant will be able to do. After they confirm, the assistant receives its
    tokens and can call the tools.
 
-Assistants that implement the MCP authorisation flow discover everything automatically: an MCP request
-without a token is answered with HTTP 401 and a `WWW-Authenticate` header pointing to the protected
-resource metadata, which names the authorisation server.
+Assistants that implement the MCP authorisation flow discover everything automatically once the web
+server rewrite rules are in place: an MCP request without a token is answered with HTTP 401 and a
+`WWW-Authenticate` header pointing to the protected resource metadata, which names the
+authorisation server.
 
 ### Users: reviewing connected assistants
 
@@ -144,9 +146,13 @@ MCP behaviour in short:
 
 ### `/.well-known` rewrite rules
 
-Some assistants look for metadata at fixed `/.well-known/` addresses, which a Moodle plugin cannot serve.
-Add rewrite rules to your web server so that these addresses reach the plugin. The examples assume
-Moodle at the root of `https://moodle.example.com`.
+Some assistants look for the sign-in settings of the plugin at fixed `/.well-known/` addresses. A Moodle plugin cannot serve addresses outside its own folder, so the web server has to forward these addresses to the plugin. Without the rules, such an assistant opens `/authorize` on the site root and receives a 404, and sign-in cannot start.
+
+This is a one-time setup per site. It is needed for Moodle at the root of a domain and for Moodle in a subfolder. The rules depend on the folder name of the site, so change them if the folder name changes.
+
+#### Moodle at the root of a domain
+
+Not tested by the authors. The examples assume Moodle at `https://YOUR_DOMAIN`.
 
 nginx:
 
@@ -166,12 +172,24 @@ Apache (virtual host or `.htaccess` in the web root, with `mod_rewrite`):
 
 ```apache
 RewriteEngine On
-RewriteRule ^/?\.well-known/(openid-configuration|oauth-authorization-server)$ /local/placecom_mcp/discovery.php [L]
-RewriteRule ^/?\.well-known/oauth-protected-resource/local/placecom_mcp/mcp\.php$ /local/placecom_mcp/protected_resource.php [L]
+RewriteRule ^/?\.well-known/(openid-configuration|oauth-authorization-server)$ /local/placecom_mcp/discovery.php [PT,L]
+RewriteRule ^/?\.well-known/oauth-protected-resource/local/placecom_mcp/mcp\.php$ /local/placecom_mcp/protected_resource.php [PT,L]
 ```
 
-When Moodle lives in a subdirectory, for example `https://example.com/moodle`, the issuer contains the
-path and clients may try any of these forms; map all of them:
+The `oauth-protected-resource` rule is optional: an MCP request without a token is already answered with a 401 that points to the protected resource page.
+
+#### Moodle in a subfolder
+
+Add these lines to the Apache configuration, replace `MOODLE_FOLDER` with the folder name of your site (six places), and reload Apache. The authors tested them in the main server file of Apache 2.4 on Windows (XAMPP) with Moodle 4.5.12 in the folder `/moodle`:
+
+```apache
+RewriteEngine On
+RewriteRule ^/\.well-known/(oauth-authorization-server|openid-configuration)/MOODLE_FOLDER/?$ /MOODLE_FOLDER/local/placecom_mcp/discovery.php [PT,L]
+RewriteRule ^/MOODLE_FOLDER/\.well-known/(oauth-authorization-server|openid-configuration)/?$ /MOODLE_FOLDER/local/placecom_mcp/discovery.php [PT,L]
+RewriteRule ^/\.well-known/oauth-protected-resource/MOODLE_FOLDER/local/placecom_mcp/mcp\.php$ /MOODLE_FOLDER/local/placecom_mcp/protected_resource.php [PT,L]
+```
+
+The third rule is optional, for the same reason as above. For nginx with Moodle in a subfolder, no block is provided: forward the addresses in the table below to the files shown there. The table uses `moodle` as the folder name. Clients may try any of these forms, so map all of them.
 
 | Request | Target |
 | --- | --- |
@@ -180,8 +198,21 @@ path and clients may try any of these forms; map all of them:
 | `/.well-known/oauth-authorization-server/moodle` | `/moodle/local/placecom_mcp/discovery.php` |
 | `/.well-known/oauth-protected-resource/moodle/local/placecom_mcp/mcp.php` | `/moodle/local/placecom_mcp/protected_resource.php` |
 
-Behind a reverse proxy, set the **Issuer URL** setting to the public address and make the rewrites on
-the server that receives the public requests.
+#### Reload and check
+
+Reload the web server so that the rules take effect. For example, on Debian or Ubuntu run `sudo systemctl reload apache2`; with XAMPP, restart Apache.
+
+Each of these three commands should print `200`:
+
+```
+curl -s -o /dev/null -w "%{http_code}\n" https://YOUR_DOMAIN/.well-known/oauth-authorization-server
+curl -s -o /dev/null -w "%{http_code}\n" https://YOUR_DOMAIN/.well-known/openid-configuration
+curl -s -o /dev/null -w "%{http_code}\n" https://YOUR_DOMAIN/.well-known/oauth-protected-resource/local/placecom_mcp/mcp.php
+```
+
+In Windows PowerShell use `curl.exe` (plain `curl` is an alias for another command) and replace `/dev/null` with `NUL`. For Moodle in a subfolder, use the addresses from the table, after `https://YOUR_DOMAIN`, with your own folder name instead of `moodle`. On the authors' test site those addresses returned 200 (checked with curl in Windows Command Prompt).
+
+Behind a reverse proxy, set the **Issuer URL** setting to the public address and make the rewrites on the server that receives the public requests.
 
 ## Scopes
 
