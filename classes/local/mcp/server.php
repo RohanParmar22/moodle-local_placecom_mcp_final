@@ -188,7 +188,10 @@ class server {
                 400,
                 null,
                 jsonrpc::INVALID_REQUEST,
-                get_string('error_protocolversion', 'local_placecom_mcp', s($version))
+                get_string('error_protocolversion', 'local_placecom_mcp', [
+                    'version' => s($version),
+                    'supported' => implode(', ', self::SUPPORTED_VERSIONS),
+                ])
             );
         }
 

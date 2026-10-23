@@ -191,6 +191,9 @@ final class server_test extends \advanced_testcase {
         );
         $this->assertSame(400, $response->get_status());
         $this->assertSame(jsonrpc::INVALID_REQUEST, $response->get_json()['error']['code']);
+        $message = $response->get_json()['error']['message'];
+        $this->assertStringContainsString('1999-01-01', $message);
+        $this->assertStringContainsString(implode(', ', server::SUPPORTED_VERSIONS), $message);
 
         $response = $this->send(
             '{"jsonrpc":"2.0","method":"ping","id":1}',
