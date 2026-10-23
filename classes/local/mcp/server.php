@@ -341,7 +341,7 @@ class server {
                 throw new jsonrpc_exception(jsonrpc::METHOD_NOT_FOUND, self::str('error_methodnotfound'));
         }
     }
-    
+
     /**
      * Response for an unexpected failure.
      *
