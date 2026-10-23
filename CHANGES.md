@@ -2,6 +2,17 @@
 
 All notable changes to this plugin are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- MCP protocol revision 2026-07-28 next to 2025-11-25, 2025-06-18 and 2025-03-26: the version travels in `_meta` and in the `MCP-Protocol-Version`, `Mcp-Method` and `Mcp-Name` headers, there is no `initialize` handshake, and the `server/discover` method is available. Results carry `resultType`, and `tools/list` also carries `ttlMs` and `cacheScope`.
+
+### Changed
+
+- An unknown `MCP-Protocol-Version` is answered with the `UnsupportedProtocolVersion` error (code -32022) whose data lists the supported versions. It was a generic invalid request error before.
+- The `Mcp-Method` and `Mcp-Name` headers are allowed in CORS preflight answers.
+
 ## [0.3.0] - 2026-10-20
 
 Placecom MCP Connector: connect MCP-capable AI assistants to Moodle on behalf of signed-in users.

@@ -44,7 +44,7 @@ class server {
     /** @var string Server name reported by initialize. */
     public const SERVER_NAME = 'Moodle MCP Server';
 
-    /** @var string[] Supported MCP protocol revisions, latest first. */
+    /** @var string[] Earlier MCP protocol revisions, which open with an initialize handshake, latest first. */
     public const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'];
 
     /** @var string The revision that carries version and capabilities in every request. */

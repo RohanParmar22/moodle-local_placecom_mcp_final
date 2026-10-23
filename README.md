@@ -133,8 +133,10 @@ OAuth behaviour in short:
 
 MCP behaviour in short:
 
-- Supported protocol versions: `2025-11-25`, `2025-06-18`, `2025-03-26`.
-- Methods: `initialize`, `ping`, `tools/list`, `tools/call`. Notifications are acknowledged with HTTP 202.
+- Supported protocol versions: `2026-07-28`, `2025-11-25`, `2025-06-18`, `2025-03-26`. One endpoint serves both styles of client. An unknown version is answered with HTTP 400 and the `UnsupportedProtocolVersion` error (code -32022), which lists the supported versions.
+- `2025-11-25`, `2025-06-18` and `2025-03-26`: methods `initialize`, `ping`, `tools/list`, `tools/call`. A request without an `MCP-Protocol-Version` header is handled this way.
+- `2026-07-28`: no `initialize` handshake. Methods `server/discover`, `tools/list`, `tools/call`. Every request carries its version in `params._meta` and in the `MCP-Protocol-Version` header, plus the `Mcp-Method` header and, for `tools/call`, the `Mcp-Name` header. A missing or mismatching header is answered with HTTP 400 and the `HeaderMismatch` error (code -32020). Results carry `resultType`, and the list results also carry `ttlMs` and `cacheScope`.
+- Notifications are acknowledged with HTTP 202.
 - `GET` is answered with 405 (no server-sent event stream). `OPTIONS` answers CORS preflight requests.
 - Request bodies are limited to 1 MiB.
 - Tool failures, such as a permission error inside Moodle, are returned as tool results with
