@@ -58,6 +58,12 @@ class jsonrpc {
     /** @var int Implementation-defined: authenticated but not allowed. */
     public const FORBIDDEN = -32003;
 
+    /** @var int MCP 2026-07-28: HTTP headers are missing or do not match the request body. */
+    public const HEADER_MISMATCH = -32020;
+
+    /** @var int MCP 2026-07-28: the requested protocol version is not supported. */
+    public const UNSUPPORTED_PROTOCOL_VERSION = -32022;
+
     /** @var int Flags used for every JSON document produced by the endpoint. */
     public const JSON_FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION;
 
