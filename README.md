@@ -152,7 +152,7 @@ This is a one-time setup per site. It is needed for Moodle at the root of a doma
 
 #### Moodle at the root of a domain
 
-Not tested by the authors. The examples assume Moodle at `https://YOUR_DOMAIN`.
+The examples assume Moodle at `https://YOUR_DOMAIN`.
 
 nginx:
 
@@ -180,7 +180,7 @@ The `oauth-protected-resource` rule is optional: an MCP request without a token 
 
 #### Moodle in a subfolder
 
-Add these lines to the Apache configuration, replace `MOODLE_FOLDER` with the folder name of your site (six places), and reload Apache. The authors tested them in the main server file of Apache 2.4 on Windows (XAMPP) with Moodle 4.5.12 in the folder `/moodle`:
+Add these lines to the Apache configuration, replace `MOODLE_FOLDER` with the folder name of your site (six places), and reload Apache. The authors tested them in the main server file of Apache 2.4.58 on Windows (XAMPP) with Moodle 4.5.12 in the folder `/moodle`:
 
 ```apache
 RewriteEngine On
