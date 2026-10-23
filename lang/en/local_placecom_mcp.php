@@ -142,6 +142,7 @@ $string['error_clientidinvalid'] = 'The client ID must be 3 to 100 characters lo
 $string['error_clientidrequired'] = 'Enter a client ID.';
 $string['error_deleteactivekey'] = 'The active signing key cannot be deleted. Rotate the keys first.';
 $string['error_emptybody'] = 'The request body is empty.';
+$string['error_headermismatch'] = 'The {$a} header is missing or does not match the request body.';
 $string['error_insufficientscope'] = 'The access token does not include the moodle_mcp_read scope.';
 $string['error_internal'] = 'Internal error';
 $string['error_invalidid'] = 'The request id must be a string, an integer or null.';

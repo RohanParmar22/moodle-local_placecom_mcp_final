@@ -47,6 +47,12 @@ class server {
     /** @var string[] Supported MCP protocol revisions, latest first. */
     public const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'];
 
+    /** @var string The revision that carries version and capabilities in every request. */
+    public const MODERN_VERSION = '2026-07-28';
+
+    /** @var string[] Every revision the server answers, latest first. */
+    public const ALL_VERSIONS = ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26'];
+
     /** @var int Largest accepted request body in bytes (1 MiB). */
     public const MAX_BODY = 1048576;
 
@@ -154,7 +160,8 @@ class server {
         if ($httpmethod === 'OPTIONS') {
             return http_response::empty(204, [
                 'Access-Control-Allow-Methods' => 'POST, OPTIONS',
-                'Access-Control-Allow-Headers' => 'Authorization, Content-Type, Accept, Mcp-Protocol-Version, Mcp-Session-Id',
+                'Access-Control-Allow-Headers' => 'Authorization, Content-Type, Accept, Mcp-Protocol-Version, ' .
+                    'Mcp-Session-Id, Mcp-Method, Mcp-Name',
                 'Access-Control-Max-Age' => '86400',
             ]);
         }
