@@ -199,4 +199,105 @@ final class tool_executor_test extends \advanced_testcase {
             tool_executor::error_result('Oops')
         );
     }
+
+    /**
+     * Create a course with an editing teacher, a group with an enrolment key, and a quiz and a lesson with passwords.
+     *
+     * @return array The teacher and the course.
+     */
+    private function create_course_with_secrets(): array {
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $teacher = $generator->create_user();
+        $generator->enrol_user($teacher->id, $course->id, 'editingteacher');
+        $generator->create_group(['courseid' => $course->id, 'name' => 'Group A', 'enrolmentkey' => 'GroupKey123']);
+        $generator->create_module('quiz', [
+            'course' => $course->id,
+            'name' => 'Secret quiz',
+            'password' => 'QuizPass123',
+            'subnet' => '10.0.0.0/8',
+        ]);
+        $generator->create_module('lesson', [
+            'course' => $course->id,
+            'name' => 'Secret lesson',
+            'usepassword' => 1,
+            'password' => 'LessonPass123',
+        ]);
+        return [$teacher, $course];
+    }
+
+    /**
+     * Call a Moodle function directly, as the current user, without the filter.
+     *
+     * @param string $name External function name.
+     * @param array $arguments Arguments.
+     * @return mixed What Moodle returns.
+     */
+    private function call_moodle(string $name, array $arguments) {
+        $info = tool_registry::function_info($name);
+        $this->assertNotNull($info);
+        $params = \core_external\external_api::validate_parameters($info->parameters_desc, $arguments);
+        return call_user_func_array([$info->classname, $info->methodname], array_values($params));
+    }
+
+    /**
+     * Group enrolment keys are not passed to the assistant, although Moodle returns them to this teacher.
+     */
+    public function test_group_enrolment_key_removed(): void {
+        $this->resetAfterTest();
+        [$teacher, $course] = $this->create_course_with_secrets();
+        $ctx = $this->caller('moodle_mcp_read', $teacher);
+
+        $moodle = $this->call_moodle('core_group_get_course_groups', ['courseid' => $course->id]);
+        $this->assertSame('GroupKey123', $moodle[0]['enrolmentkey']);
+
+        $result = (new tool_executor())->call('core_group_get_course_groups', ['courseid' => $course->id], $ctx);
+        $this->assertArrayNotHasKey('isError', $result, $result['content'][0]['text']);
+        $groups = $result['structuredContent']['result'];
+        $this->assertSame('Group A', $groups[0]['name']);
+        $this->assertArrayNotHasKey('enrolmentkey', $groups[0]);
+        $this->assertStringNotContainsString('GroupKey123', $result['content'][0]['text']);
+    }
+
+    /**
+     * Quiz passwords and network restrictions are not passed to the assistant, although Moodle returns them.
+     */
+    public function test_quiz_password_removed(): void {
+        $this->resetAfterTest();
+        [$teacher, $course] = $this->create_course_with_secrets();
+        $ctx = $this->caller('moodle_mcp_read', $teacher);
+
+        $moodle = $this->call_moodle('mod_quiz_get_quizzes_by_courses', ['courseids' => [$course->id]]);
+        $this->assertSame('QuizPass123', $moodle['quizzes'][0]['password']);
+        $this->assertSame('10.0.0.0/8', $moodle['quizzes'][0]['subnet']);
+
+        $result = (new tool_executor())->call('mod_quiz_get_quizzes_by_courses', ['courseids' => [$course->id]], $ctx);
+        $this->assertArrayNotHasKey('isError', $result, $result['content'][0]['text']);
+        $quiz = $result['structuredContent']['result']['quizzes'][0];
+        $this->assertSame('Secret quiz', $quiz['name']);
+        $this->assertArrayNotHasKey('password', $quiz);
+        $this->assertArrayNotHasKey('subnet', $quiz);
+        $this->assertStringNotContainsString('QuizPass123', $result['content'][0]['text']);
+        $this->assertStringNotContainsString('10.0.0.0/8', $result['content'][0]['text']);
+    }
+
+    /**
+     * Lesson passwords are not passed to the assistant, although Moodle returns them to this teacher.
+     */
+    public function test_lesson_password_removed(): void {
+        $this->resetAfterTest();
+        [$teacher, $course] = $this->create_course_with_secrets();
+        $ctx = $this->caller('moodle_mcp_read', $teacher);
+
+        $moodle = $this->call_moodle('mod_lesson_get_lessons_by_courses', ['courseids' => [$course->id]]);
+        $this->assertSame('LessonPass123', $moodle['lessons'][0]['password']);
+
+        $result = (new tool_executor())->call('mod_lesson_get_lessons_by_courses', ['courseids' => [$course->id]], $ctx);
+        $this->assertArrayNotHasKey('isError', $result, $result['content'][0]['text']);
+        $lesson = $result['structuredContent']['result']['lessons'][0];
+        $this->assertSame('Secret lesson', $lesson['name']);
+        $this->assertArrayHasKey('usepassword', $lesson);
+        $this->assertArrayNotHasKey('password', $lesson);
+        $this->assertStringNotContainsString('LessonPass123', $result['content'][0]['text']);
+    }
 }

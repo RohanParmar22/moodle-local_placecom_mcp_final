@@ -135,4 +135,67 @@ final class tool_registry_test extends \advanced_testcase {
         $this->assertEqualsCanonicalizing(result_filter::SITE_INFO_KEYS, $properties);
         $this->assertNotContains('userprivateaccesskey', $siteinfo['outputSchema']['properties']['result']['required'] ?? []);
     }
+
+    /**
+     * All property names and required names in an output schema, at any depth.
+     *
+     * @param mixed $schema JSON schema as an array.
+     * @return string[]
+     */
+    private function schema_names($schema): array {
+        $names = [];
+        if (!is_array($schema)) {
+            return $names;
+        }
+        foreach ($schema['required'] ?? [] as $name) {
+            $names[] = (string) $name;
+        }
+        foreach ((array) ($schema['properties'] ?? []) as $name => $child) {
+            $names[] = (string) $name;
+            $names = array_merge($names, $this->schema_names($child));
+        }
+        if (isset($schema['items'])) {
+            $names = array_merge($names, $this->schema_names($schema['items']));
+        }
+        return $names;
+    }
+
+    /**
+     * The schemas of the listed functions do not advertise the removed fields, but still advertise their other fields.
+     */
+    public function test_secret_fields_not_advertised(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $tools = [];
+        foreach ((new tool_registry())->list_tools($this->context_for('moodle_mcp_read')) as $tool) {
+            $tools[$tool['name']] = $tool;
+        }
+        foreach (result_filter::REMOVED_FIELDS as $function => $removed) {
+            $this->assertArrayHasKey($function, $tools, $function);
+            $names = $this->schema_names($tools[$function]['outputSchema']);
+            $this->assertContains('name', $names, $function);
+            foreach ($removed as $field) {
+                $this->assertNotContains($field, $names, $function . ' still advertises ' . $field);
+            }
+        }
+    }
+
+    /**
+     * No advertised output schema contains a credential-like field name. A new Moodle version that adds one fails here.
+     */
+    public function test_no_credential_like_fields_advertised(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $harmless = ['usepassword'];
+        $pattern = '/password|passwd|secret|token|privatekey|accesskey|apikey|enrolmentkey|enrolkey|authkey|subnet/i';
+        $found = [];
+        foreach ((new tool_registry())->list_tools($this->context_for('moodle_mcp_read moodle_mcp_write')) as $tool) {
+            foreach (array_unique($this->schema_names($tool['outputSchema'])) as $name) {
+                if (preg_match($pattern, $name) && !in_array($name, $harmless, true)) {
+                    $found[] = $tool['name'] . ': ' . $name;
+                }
+            }
+        }
+        $this->assertSame([], $found, 'Credential-like fields are advertised: ' . implode(', ', $found));
+    }
 }

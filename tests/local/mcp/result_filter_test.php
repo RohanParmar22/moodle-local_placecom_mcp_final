@@ -112,4 +112,75 @@ final class result_filter_test extends \advanced_testcase {
         $other = new external_single_structure(['a' => new external_value(PARAM_INT)]);
         $this->assertSame($other, result_filter::filter_schema('core_course_get_categories', $other));
     }
+
+    /**
+     * Group enrolment keys, quiz and lesson passwords and the quiz network restriction are removed from replies.
+     */
+    public function test_secret_fields_removed(): void {
+        $groups = result_filter::filter('core_group_get_course_groups', [
+            ['id' => 1, 'name' => 'Group A', 'enrolmentkey' => 'key1'],
+            ['id' => 2, 'name' => 'Group B', 'enrolmentkey' => ''],
+        ]);
+        $this->assertSame([['id' => 1, 'name' => 'Group A'], ['id' => 2, 'name' => 'Group B']], $groups);
+
+        $quizzes = result_filter::filter('mod_quiz_get_quizzes_by_courses', [
+            'quizzes' => [['id' => 5, 'name' => 'Quiz', 'timelimit' => 60, 'password' => 'p', 'subnet' => '10.0.0.0/8']],
+            'warnings' => [],
+        ]);
+        $this->assertSame(['quizzes' => [['id' => 5, 'name' => 'Quiz', 'timelimit' => 60]], 'warnings' => []], $quizzes);
+
+        $lessons = result_filter::filter('mod_lesson_get_lessons_by_courses', [
+            'lessons' => [['id' => 7, 'name' => 'Lesson', 'usepassword' => 1, 'password' => 'p']],
+            'warnings' => [],
+        ]);
+        $this->assertSame(['lessons' => [['id' => 7, 'name' => 'Lesson', 'usepassword' => 1]], 'warnings' => []], $lessons);
+    }
+
+    /**
+     * Objects are cleaned too without changing the original, and other functions keep the same field names.
+     */
+    public function test_secret_fields_in_objects_and_other_functions(): void {
+        $reply = (object) ['lessons' => [(object) ['id' => 7, 'password' => 'p']], 'warnings' => []];
+        $filtered = result_filter::filter('mod_lesson_get_lessons_by_courses', $reply);
+        $this->assertEquals((object) ['lessons' => [(object) ['id' => 7]], 'warnings' => []], $filtered);
+        $this->assertSame('p', $reply->lessons[0]->password);
+
+        $other = [['id' => 1, 'password' => 'kept']];
+        $this->assertSame($other, result_filter::filter('mod_assign_get_assignments', $other));
+    }
+
+    /**
+     * The advertised schemas of the listed functions lose the secret fields, and the original is not changed.
+     */
+    public function test_secret_fields_removed_from_schema(): void {
+        $groups = new \core_external\external_multiple_structure(new external_single_structure([
+            'id' => new external_value(PARAM_INT, 'id'),
+            'enrolmentkey' => new external_value(PARAM_RAW, 'key'),
+        ]));
+        $filtered = result_filter::filter_schema('core_group_get_course_groups', $groups);
+        $this->assertInstanceOf(\core_external\external_multiple_structure::class, $filtered);
+        $this->assertSame(['id'], array_keys($filtered->content->keys));
+        $this->assertArrayHasKey('enrolmentkey', $groups->content->keys);
+
+        $quizzes = new external_single_structure([
+            'quizzes' => new \core_external\external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'id'),
+                'password' => new external_value(PARAM_RAW, 'password', VALUE_OPTIONAL),
+                'subnet' => new external_value(PARAM_RAW, 'subnet', VALUE_OPTIONAL),
+            ])),
+            'warnings' => new external_value(PARAM_RAW, 'warnings', VALUE_OPTIONAL),
+        ]);
+        $filtered = result_filter::filter_schema('mod_quiz_get_quizzes_by_courses', $quizzes);
+        $this->assertSame(['quizzes', 'warnings'], array_keys($filtered->keys));
+        $this->assertSame(['id'], array_keys($filtered->keys['quizzes']->content->keys));
+
+        $lessons = new external_single_structure([
+            'lessons' => new \core_external\external_multiple_structure(new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'id'),
+                'password' => new external_value(PARAM_RAW, 'password', VALUE_OPTIONAL),
+            ])),
+        ]);
+        $filtered = result_filter::filter_schema('mod_lesson_get_lessons_by_courses', $lessons);
+        $this->assertSame(['id'], array_keys($filtered->keys['lessons']->content->keys));
+    }
 }
