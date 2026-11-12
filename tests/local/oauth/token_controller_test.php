@@ -472,4 +472,69 @@ final class token_controller_test extends \advanced_testcase {
         $this->assert_error($response, 500, 'server_error');
         $this->assertEquals(0, $DB->get_field('local_placecom_mcp_authcode', 'timeused', ['id' => $code->id]));
     }
+
+    /**
+     * Take the lock that guards a code or refresh token, as a second request would.
+     *
+     * @param string $credential Plaintext code or refresh token.
+     * @return \core\lock\lock|false The lock, or false when it is still held.
+     */
+    private function take_credential_lock(string $credential) {
+        $factory = \core\lock\lock_config::get_lock_factory('local_placecom_mcp');
+        return $factory->get_lock(token_controller::lock_name($credential), 2);
+    }
+
+    /**
+     * The lock name is stable, short and does not contain the credential.
+     */
+    public function test_lock_name(): void {
+        $name = token_controller::lock_name('secret-code');
+        $this->assertSame($name, token_controller::lock_name('secret-code'));
+        $this->assertNotSame($name, token_controller::lock_name('other-code'));
+        $this->assertStringNotContainsString('secret-code', $name);
+        $this->assertLessThanOrEqual(32, strlen($name));
+    }
+
+    /**
+     * The lock is free again after a code exchange.
+     */
+    public function test_lock_released_after_code_exchange(): void {
+        $code = $this->code();
+        $this->assertSame(200, $this->post($this->exchange_body($code->code))->get_status());
+        $lock = $this->take_credential_lock($code->code);
+        $this->assertNotFalse($lock);
+        $lock->release();
+    }
+
+    /**
+     * The lock is free again after a request that is refused.
+     */
+    public function test_lock_released_after_refused_requests(): void {
+        $this->assert_error($this->post($this->exchange_body('unknown-code')), 400, 'invalid_grant');
+        $lock = $this->take_credential_lock('unknown-code');
+        $this->assertNotFalse($lock);
+        $lock->release();
+
+        $base = ['grant_type' => 'refresh_token', 'client_id' => $this->client->clientid,
+            'client_secret' => $this->client->plainsecret];
+        $this->assert_error($this->post($base + ['refresh_token' => 'unknown-token']), 400, 'invalid_grant');
+        $lock = $this->take_credential_lock('unknown-token');
+        $this->assertNotFalse($lock);
+        $lock->release();
+    }
+
+    /**
+     * A refresh token works once; the second use is refused and exactly one refresh token is left for the grant.
+     */
+    public function test_refresh_token_used_once(): void {
+        global $DB;
+        $first = $this->post($this->exchange_body($this->code()->code))->get_json();
+        $grantid = (new token_store())->find_refresh_token($first['refresh_token'])->grantid;
+        $body = ['grant_type' => 'refresh_token', 'client_id' => $this->client->clientid,
+            'client_secret' => $this->client->plainsecret, 'refresh_token' => $first['refresh_token']];
+
+        $this->assertSame(200, $this->post($body)->get_status());
+        $this->assert_error($this->post($body), 400, 'invalid_grant');
+        $this->assertSame(1, $DB->count_records('local_placecom_mcp_refresh', ['grantid' => $grantid]));
+    }
 }

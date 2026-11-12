@@ -44,6 +44,9 @@ class token_controller {
     /** @var string Refresh token grant type. */
     public const GRANT_REFRESH = 'refresh_token';
 
+    /** @var int Seconds to wait for the lock that lets only one request at a time use a code or refresh token. */
+    public const LOCK_TIMEOUT = 5;
+
     /** @var token_store Credential storage. */
     private token_store $store;
 
@@ -109,7 +112,7 @@ class token_controller {
      * @return http_response
      * @throws oauth_exception
      */
-    private function exchange_code(client $client, array $post): http_response {
+    private function exchange_code_locked(client $client, array $post): http_response {
         global $DB;
 
         $code = self::param($post, 'code');
@@ -208,7 +211,7 @@ class token_controller {
      * @return http_response
      * @throws oauth_exception
      */
-    private function refresh(client $client, array $post): http_response {
+    private function refresh_locked(client $client, array $post): http_response {
         global $DB;
 
         $plain = self::param($post, 'refresh_token');
@@ -358,6 +361,74 @@ class token_controller {
      */
     private static function invalid_grant(string $identifier): oauth_exception {
         return new oauth_exception('invalid_grant', self::str($identifier));
+    }
+
+    /**
+     * Run a grant handler while holding a lock on the credential, so one code or refresh token cannot be used twice at once.
+     *
+     * @param string $credential Plaintext code or refresh token; when empty the handler runs without a lock.
+     * @param callable $handler Grant handler that returns the response.
+     * @return http_response
+     * @throws oauth_exception `server_error` (500) when the lock cannot be obtained in time.
+     */
+    private function with_credential_lock(string $credential, callable $handler): http_response {
+        if ($credential === '') {
+            return $handler();
+        }
+        $factory = \core\lock\lock_config::get_lock_factory('local_placecom_mcp');
+        $lock = $factory->get_lock(self::lock_name($credential), self::LOCK_TIMEOUT, 60);
+        if (!$lock) {
+            throw new oauth_exception('server_error', self::str('err_servererror'), 500);
+        }
+        try {
+            return $handler();
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Name of the lock for one code or refresh token, derived from a hash so the credential is never part of it.
+     *
+     * @param string $credential Plaintext code or refresh token.
+     * @return string
+     */
+    public static function lock_name(string $credential): string {
+        return 'cred_' . substr(hash('sha256', $credential), 0, 16);
+    }
+
+    /**
+     * The authorization code grant. Only one request at a time can use a given code.
+     *
+     * @param client $client Authenticated client.
+     * @param array $post Form body.
+     * @return http_response
+     * @throws oauth_exception
+     */
+    private function exchange_code(client $client, array $post): http_response {
+        return $this->with_credential_lock(
+            self::param($post, 'code'),
+            function () use ($client, $post): http_response {
+                return $this->exchange_code_locked($client, $post);
+            }
+        );
+    }
+
+    /**
+     * The refresh token grant. Only one request at a time can use a given refresh token.
+     *
+     * @param client $client Authenticated client.
+     * @param array $post Form body.
+     * @return http_response
+     * @throws oauth_exception
+     */
+    private function refresh(client $client, array $post): http_response {
+        return $this->with_credential_lock(
+            self::param($post, 'refresh_token'),
+            function () use ($client, $post): http_response {
+                return $this->refresh_locked($client, $post);
+            }
+        );
     }
 
     /**
