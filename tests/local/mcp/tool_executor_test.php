@@ -206,6 +206,7 @@ final class tool_executor_test extends \advanced_testcase {
      * @return array The teacher and the course.
      */
     private function create_course_with_secrets(): array {
+        global $DB;
         $this->setAdminUser();
         $generator = $this->getDataGenerator();
         $course = $generator->create_course();
@@ -224,6 +225,10 @@ final class tool_executor_test extends \advanced_testcase {
             'usepassword' => 1,
             'password' => 'LessonPass123',
         ]);
+        $DB->set_field('quiz', 'password', 'QuizPass123', ['course' => $course->id]);
+        $DB->set_field('quiz', 'subnet', '10.0.0.0/8', ['course' => $course->id]);
+        $DB->set_field('lesson', 'password', 'LessonPass123', ['course' => $course->id]);
+        $DB->set_field('lesson', 'usepassword', 1, ['course' => $course->id]);
         return [$teacher, $course];
     }
 
@@ -291,7 +296,7 @@ final class tool_executor_test extends \advanced_testcase {
         $ctx = $this->caller('moodle_mcp_read', $teacher);
 
         $moodle = $this->call_moodle('mod_lesson_get_lessons_by_courses', ['courseids' => [$course->id]]);
-        $this->assertSame('LessonPass123', $moodle['lessons'][0]['password']);
+        $this->assertSame('LessonPass123', ((array) $moodle['lessons'][0])['password']);
 
         $result = (new tool_executor())->call('mod_lesson_get_lessons_by_courses', ['courseids' => [$course->id]], $ctx);
         $this->assertArrayNotHasKey('isError', $result, $result['content'][0]['text']);
