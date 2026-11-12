@@ -206,6 +206,7 @@ final class tool_executor_test extends \advanced_testcase {
      * @return array The teacher and the course.
      */
     private function create_course_with_secrets(): array {
+        $this->setAdminUser();
         $generator = $this->getDataGenerator();
         $course = $generator->create_course();
         $teacher = $generator->create_user();
