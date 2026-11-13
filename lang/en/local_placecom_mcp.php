@@ -255,6 +255,7 @@ $string['scope_email'] = 'See your email address';
 $string['scope_help'] = 'Permissions this client may receive, separated by spaces. Recommended: <code>openid profile email offline_access moodle_mcp_read</code>. moodle_mcp_read is required. Add moodle_mcp_write only if the assistant should be able to post in forums on behalf of users.';
 $string['scope_moodle_mcp_read'] = 'Read your courses, groups, calendar and notifications';
 $string['scope_moodle_mcp_write'] = 'Post to forums in your courses on your behalf. Moodle does not ask you to approve each post; your assistant may.';
+$string['scope_moodle_mcp_write_off'] = 'Post to forums in your courses on your behalf. This is currently switched off by the site administrator, so assistants cannot post.';
 $string['scope_offline_access'] = 'Stay connected without asking you to sign in again';
 $string['scope_openid'] = 'Confirm your identity with your Moodle account';
 $string['scope_phone'] = 'See your phone number';

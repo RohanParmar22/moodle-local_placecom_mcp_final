@@ -138,11 +138,16 @@ class scopes {
     /**
      * Human readable description of a scope, or the raw scope name when there is none.
      *
+     * While posting to forums is switched off on the site, the write scope says so.
+     *
      * @param string $scope Scope name.
      * @return string
      */
     public static function describe(string $scope): string {
         $identifier = 'scope_' . $scope;
+        if ($scope === self::WRITE && !config::is_forum_posting_allowed()) {
+            $identifier .= '_off';
+        }
         if (preg_match('/^[a-z0-9_]+$/', $scope) && get_string_manager()->string_exists($identifier, config::COMPONENT)) {
             return get_string($identifier, config::COMPONENT);
         }

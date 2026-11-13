@@ -118,10 +118,29 @@ final class scopes_test extends \advanced_testcase {
      * Known scopes get a description; unknown ones are shown raw.
      */
     public function test_describe(): void {
+        $this->resetAfterTest();
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
         foreach (scopes::ALL as $scope) {
             $this->assertSame(get_string('scope_' . $scope, 'local_placecom_mcp'), scopes::describe($scope));
         }
         $this->assertSame('teacher.read', scopes::describe('teacher.read'));
         $this->assertSame('something_else', scopes::describe('something_else'));
+    }
+
+    /**
+     * While posting to forums is switched off on the site, the write scope says so; other scopes are unchanged.
+     */
+    public function test_describe_write_scope_switched_off(): void {
+        $this->resetAfterTest();
+        set_config('allowforumposting', 0, 'local_placecom_mcp');
+        $this->assertSame(
+            get_string('scope_moodle_mcp_write_off', 'local_placecom_mcp'),
+            scopes::describe(scopes::WRITE)
+        );
+        $this->assertNotSame(get_string('scope_moodle_mcp_write', 'local_placecom_mcp'), scopes::describe(scopes::WRITE));
+        $this->assertSame(get_string('scope_moodle_mcp_read', 'local_placecom_mcp'), scopes::describe(scopes::READ));
+
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
+        $this->assertSame(get_string('scope_moodle_mcp_write', 'local_placecom_mcp'), scopes::describe(scopes::WRITE));
     }
 }
