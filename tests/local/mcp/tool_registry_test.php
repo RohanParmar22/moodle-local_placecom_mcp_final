@@ -102,6 +102,7 @@ final class tool_registry_test extends \advanced_testcase {
     public function test_write_listing(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
         $tools = (new tool_registry())->list_tools($this->context_for('openid moodle_mcp_read moodle_mcp_write'));
         $this->assertCount(25, $tools);
         $names = array_column($tools, 'name');
@@ -186,6 +187,7 @@ final class tool_registry_test extends \advanced_testcase {
     public function test_no_credential_like_fields_advertised(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
         $harmless = ['usepassword'];
         $pattern = '/password|passwd|secret|token|privatekey|accesskey|apikey|enrolmentkey|enrolkey|authkey|subnet/i';
         $found = [];
@@ -197,5 +199,39 @@ final class tool_registry_test extends \advanced_testcase {
             }
         }
         $this->assertSame([], $found, 'Credential-like fields are advertised: ' . implode(', ', $found));
+    }
+
+    /**
+     * With the write scope but posting switched off on the site, the write tools are not listed.
+     */
+    public function test_write_tools_hidden_when_posting_switched_off(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $tools = (new tool_registry())->list_tools($this->context_for('openid moodle_mcp_read moodle_mcp_write'));
+        $names = array_column($tools, 'name');
+        $this->assertCount(23, $tools);
+        foreach (self::WRITES as $write) {
+            $this->assertNotContains($write, $names);
+        }
+    }
+
+    /**
+     * With posting allowed, the two write tools are listed with a reminder to ask the user first; read tools are not.
+     */
+    public function test_write_tools_describe_user_approval(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
+        $notice = get_string('toolwritenotice', 'local_placecom_mcp');
+        $found = 0;
+        foreach ((new tool_registry())->list_tools($this->context_for('openid moodle_mcp_read moodle_mcp_write')) as $tool) {
+            if (in_array($tool['name'], self::WRITES, true)) {
+                $this->assertStringContainsString($notice, $tool['description'], $tool['name']);
+                $found++;
+            } else {
+                $this->assertStringNotContainsString($notice, $tool['description'], $tool['name']);
+            }
+        }
+        $this->assertSame(2, $found);
     }
 }

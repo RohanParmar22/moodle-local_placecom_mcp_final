@@ -120,4 +120,13 @@ class config {
         $value = get_config(self::COMPONENT, 'enabled');
         return $value === false || (string) $value !== '0';
     }
+
+    /**
+     * Whether assistants may post to forums. A setting that was never saved counts as off.
+     *
+     * @return bool
+     */
+    public static function is_forum_posting_allowed(): bool {
+        return (string) get_config(self::COMPONENT, 'allowforumposting') === '1';
+    }
 }

@@ -404,6 +404,7 @@ final class server_test extends \advanced_testcase {
      * Tool listing and calling through the server.
      */
     public function test_tools(): void {
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
         $response = $this->send('{"jsonrpc":"2.0","method":"tools/list","id":1}');
         $this->assertCount(25, $response->get_json()['result']['tools']);
 

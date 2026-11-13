@@ -122,11 +122,11 @@ class auth_context {
     }
 
     /**
-     * Whether the token may call write functions.
+     * Whether the token may call write functions: it needs the write scope, and posting to forums must be allowed on the site.
      *
      * @return bool
      */
     public function can_write(): bool {
-        return $this->has_scope(scopes::WRITE);
+        return $this->has_scope(scopes::WRITE) && \local_placecom_mcp\local\oauth\config::is_forum_posting_allowed();
     }
 }

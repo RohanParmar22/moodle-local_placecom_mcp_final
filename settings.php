@@ -56,6 +56,13 @@ if ($hassiteconfig) {
             1
         ));
 
+        $settings->add(new admin_setting_configcheckbox(
+            'local_placecom_mcp/allowforumposting',
+            get_string('allowforumposting', 'local_placecom_mcp'),
+            get_string('allowforumposting_desc', 'local_placecom_mcp'),
+            0
+        ));
+
         $settings->add(new admin_setting_configduration(
             'local_placecom_mcp/accesstokenlifetime',
             get_string('accesstokenlifetime', 'local_placecom_mcp'),

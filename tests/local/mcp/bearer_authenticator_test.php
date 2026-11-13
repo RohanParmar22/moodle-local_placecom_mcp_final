@@ -278,6 +278,7 @@ final class bearer_authenticator_test extends \advanced_testcase {
     public function test_success(): void {
         global $DB, $USER;
         $this->resetAfterTest();
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
         [$user, $grant, $client] = $this->create_connection('openid moodle_mcp_read');
         $DB->set_field('local_placecom_mcp_grant', 'timeaccessed', 0, ['id' => $grant->id]);
 

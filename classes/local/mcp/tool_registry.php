@@ -57,9 +57,13 @@ class tool_registry {
                 continue;
             }
             $returns = $info->returns_desc === null ? null : result_filter::filter_schema($name, $info->returns_desc);
+            $description = (string) ($info->description ?? '');
+            if ($iswrite) {
+                $description .= ' ' . get_string('toolwritenotice', 'local_placecom_mcp');
+            }
             $tools[] = [
                 'name' => $name,
-                'description' => (string) ($info->description ?? ''),
+                'description' => $description,
                 'inputSchema' => schema_converter::convert($info->parameters_desc),
                 'outputSchema' => schema_converter::output_schema($returns),
                 'annotations' => ['readOnlyHint' => !$iswrite],

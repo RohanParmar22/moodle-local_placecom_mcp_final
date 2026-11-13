@@ -148,6 +148,7 @@ final class tool_executor_test extends \advanced_testcase {
     public function test_write_with_scope(): void {
         global $DB;
         $this->resetAfterTest();
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
         $user = $this->getDataGenerator()->create_user();
         $forum = $this->create_forum($user);
         $ctx = $this->caller('moodle_mcp_read moodle_mcp_write', $user);
@@ -167,6 +168,7 @@ final class tool_executor_test extends \advanced_testcase {
     public function test_write_not_enrolled(): void {
         global $DB;
         $this->resetAfterTest();
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
         $user = $this->getDataGenerator()->create_user();
         $forum = $this->create_forum(null);
         $ctx = $this->caller('moodle_mcp_read moodle_mcp_write', $user);
@@ -305,5 +307,39 @@ final class tool_executor_test extends \advanced_testcase {
         $this->assertArrayHasKey('usepassword', $lesson);
         $this->assertArrayNotHasKey('password', $lesson);
         $this->assertStringNotContainsString('LessonPass123', $result['content'][0]['text']);
+    }
+
+    /**
+     * With the write scope but posting switched off on the site, write functions are refused and nothing is posted.
+     */
+    public function test_write_refused_when_posting_switched_off(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $user = $this->getDataGenerator()->create_user();
+        $forum = $this->create_forum($user);
+        $ctx = $this->caller('moodle_mcp_read moodle_mcp_write', $user);
+        $result = (new tool_executor())->call(
+            'mod_forum_add_discussion',
+            ['forumid' => $forum->id, 'subject' => 'Hello', 'message' => 'World'],
+            $ctx
+        );
+        $this->assertTrue($result['isError']);
+        $this->assertSame(get_string('error_writedisabled', 'local_placecom_mcp'), $result['content'][0]['text']);
+        $this->assertSame(0, $DB->count_records('forum_discussions', ['forum' => $forum->id]));
+    }
+
+    /**
+     * Write access needs both the write scope and the site setting that allows posting to forums.
+     */
+    public function test_can_write_needs_scope_and_setting(): void {
+        $this->resetAfterTest();
+        $this->assertFalse($this->caller('moodle_mcp_read moodle_mcp_write')->can_write());
+
+        set_config('allowforumposting', 1, 'local_placecom_mcp');
+        $this->assertTrue($this->caller('moodle_mcp_read moodle_mcp_write')->can_write());
+        $this->assertFalse($this->caller('moodle_mcp_read')->can_write());
+
+        set_config('allowforumposting', 0, 'local_placecom_mcp');
+        $this->assertFalse($this->caller('moodle_mcp_read moodle_mcp_write')->can_write());
     }
 }

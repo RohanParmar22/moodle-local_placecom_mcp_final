@@ -68,7 +68,8 @@ class tool_executor {
             );
         }
         if (allowlist::is_write($name, $info) && !$ctx->can_write()) {
-            return self::error_result(get_string('error_writescope', 'local_placecom_mcp'));
+            $reason = $ctx->has_scope(\local_placecom_mcp\local\oauth\scopes::WRITE) ? 'error_writedisabled' : 'error_writescope';
+            return self::error_result(get_string($reason, 'local_placecom_mcp'));
         }
 
         external_api::set_context_restriction(\context_system::instance());
