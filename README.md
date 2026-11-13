@@ -43,6 +43,7 @@ Site administration > Server > **Placecom MCP Connector** contains three pages.
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | Enable MCP server | On | Master switch for the MCP endpoint. When off, every MCP request is refused with HTTP 403. |
+| Allow assistants to post to forums | Off | While off, the two forum posting tools are not offered to assistants and are refused, even for connections with the `moodle_mcp_write` scope. The consent screen and the list of connected assistants then say that posting is switched off. |
 | Access token lifetime | 1 hour | Lifetime of access tokens and ID tokens. |
 | Refresh token lifetime | 1 week | Lifetime of refresh tokens. When a refresh token expires the user must approve the assistant again. |
 | Issuer URL | empty | Public base URL used as the token issuer and for every advertised endpoint, for example when Moodle runs behind a reverse proxy. Empty means the site URL. |
@@ -62,7 +63,7 @@ Register one client per assistant. Fields:
   - Claude: `https://claude.ai/api/mcp/auth_callback`
 - **Scope**: the permissions the client may receive. `moodle_mcp_read` is required. Recommended:
   `openid profile email offline_access moodle_mcp_read`. Add `moodle_mcp_write` only if the assistant
-  should post to forums on behalf of users.
+  should post to forums on behalf of users and the site setting "Allow assistants to post to forums" is on.
 - **Require PKCE**: recommended. Clients without a secret always require PKCE.
 - **Generate client secret**: creates a confidential client. The secret is displayed **once**, right
   after saving; copy it into the assistant's configuration immediately. Only a hash is stored.
@@ -225,9 +226,9 @@ Behind a reverse proxy, set the **Issuer URL** setting to the public address and
 | `phone` | Phone number. |
 | `offline_access` | Refresh tokens, so the assistant keeps access without the user signing in again. |
 | `moodle_mcp_read` | Use the MCP server and its read tools. **Required** for every client. |
-| `moodle_mcp_write` | Additionally use the two forum posting tools. |
+| `moodle_mcp_write` | Additionally use the two forum posting tools, while the site setting "Allow assistants to post to forums" is on. |
 
-A connection without `moodle_mcp_write` does not see the write tools and cannot call them.
+A connection without `moodle_mcp_write` does not see the write tools and cannot call them. The same holds for every connection while the site setting "Allow assistants to post to forums" is off. The plugin does not ask users to approve each post; whether that happens depends on the assistant.
 
 ## Tools
 
@@ -250,7 +251,7 @@ Read (23):
 - `mod_assign_get_assignments`, `mod_quiz_get_quizzes_by_courses`, `mod_lesson_get_lessons_by_courses`,
   `mod_page_get_pages_by_courses`, `mod_url_get_urls_by_courses`, `mod_forum_get_forums_by_courses`
 
-Write (2, need `moodle_mcp_write`):
+Write (2, need `moodle_mcp_write` and the site setting "Allow assistants to post to forums", which is off by default):
 
 - `mod_forum_add_discussion`
 - `mod_forum_add_discussion_post`
@@ -294,6 +295,8 @@ their plugin data.
   next request.
 - Keep debugging display off on production sites.
 - An hourly scheduled task removes expired codes, tokens and connections.
+- An authorisation code or refresh token can be used by only one request at a time: the grants run under a lock named from a hash of the credential, so two simultaneous requests cannot both succeed. A lock that cannot be obtained within 5 seconds is answered with `server_error`.
+- Group enrolment keys, quiz and lesson passwords and the quiz network restriction are removed from the replies and the advertised schemas of the group, quiz and lesson tools, because Moodle returns them in plain text to users who may manage the activity.
 
 ## Support
 

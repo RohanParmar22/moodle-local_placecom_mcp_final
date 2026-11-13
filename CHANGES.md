@@ -7,11 +7,15 @@ All notable changes to this plugin are documented in this file.
 ### Added
 
 - MCP protocol revision 2026-07-28 next to 2025-11-25, 2025-06-18 and 2025-03-26: the version travels in `_meta` and in the `MCP-Protocol-Version`, `Mcp-Method` and `Mcp-Name` headers, there is no `initialize` handshake, and the `server/discover` method is available. Results carry `resultType`, and `tools/list` also carries `ttlMs` and `cacheScope`.
+- Site setting "Allow assistants to post to forums", off by default. While it is off, the two forum posting tools are not listed and are refused even for connections with the `moodle_mcp_write` scope, and the consent screen and the list of connected assistants say that posting is switched off. The descriptions of the posting tools ask the assistant to show the user the forum and the text before posting; the plugin does not ask users to approve each post.
 
 ### Changed
 
 - An unknown `MCP-Protocol-Version` is answered with the `UnsupportedProtocolVersion` error (code -32022) whose data lists the supported versions. It was a generic invalid request error before.
 - The `Mcp-Method` and `Mcp-Name` headers are allowed in CORS preflight answers.
+- The authorisation code and refresh token grants run under a lock named from a hash of the credential, so two simultaneous requests cannot both use the same code or refresh token. A lock that cannot be obtained within 5 seconds is answered with `server_error`.
+- Group enrolment keys, quiz and lesson passwords and the quiz network restriction are removed from the replies and the advertised schemas of `core_group_get_course_groups`, `mod_quiz_get_quizzes_by_courses` and `mod_lesson_get_lessons_by_courses`.
+- Forum posting by assistants is off until an administrator ticks "Allow assistants to post to forums" in the plugin settings.
 
 ## [0.3.0] - 2026-10-20
 
